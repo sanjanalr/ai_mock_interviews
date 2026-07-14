@@ -97,3 +97,21 @@ interface InterviewFormProps {
 interface TechIconProps {
   techStack: string[];
 }
+
+interface CreateAssistantDTO {
+  name: string;
+  firstMessage: string;
+  model: {
+    provider: string;
+    model: string;
+  };
+  voice: {
+  provider: string;
+  voiceId: string;
+  stability: number;
+  similarityBoost: number;
+  speed: number;
+  style: number;
+  useSpeakerBoost: boolean;
+};
+}
