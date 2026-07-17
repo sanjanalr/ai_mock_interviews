@@ -1,10 +1,12 @@
 "use server";
 
-import { generateObject } from "ai";
-import { google } from "@ai-sdk/google";
+import { GoogleGenAI } from "@google/genai";
 
 import { db } from "@/firebase/admin";
-import { feedbackSchema } from "@/constants";
+
+const ai = new GoogleGenAI({
+  apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY!,
+});
 
 export async function createFeedback(params: CreateFeedbackParams) {
   const { interviewId, userId, transcript, feedbackId } = params;
@@ -13,32 +15,87 @@ export async function createFeedback(params: CreateFeedbackParams) {
     const formattedTranscript = transcript
       .map(
         (sentence: { role: string; content: string }) =>
-          `- ${sentence.role}: ${sentence.content}\n`
+          `- ${sentence.role}: ${sentence.content}`
       )
-      .join("");
+      .join("\n");
 
-    const { object } = await generateObject({
-      model: google("gemini-2.0-flash-001"),
-      schema: feedbackSchema,
-      prompt: `
-        You are an AI interviewer analyzing a mock interview. Your task is to evaluate the candidate based on structured categories. Be thorough and detailed in your analysis. Don't be lenient with the candidate. If there are mistakes or areas for improvement, point them out.
-        Transcript:
-        ${formattedTranscript}
+    const prompt = `
+You are a professional technical interviewer.
 
-        Please score the candidate from 0 to 100 in the following areas. Do not add categories other than the ones provided:
-        - **Communication Skills**: Clarity, articulation, structured responses.
-        - **Technical Knowledge**: Understanding of key concepts for the role.
-        - **Problem-Solving**: Ability to analyze problems and propose solutions.
-        - **Cultural & Role Fit**: Alignment with company values and job role.
-        - **Confidence & Clarity**: Confidence in responses, engagement, and clarity.
-        `,
-      system:
-        "You are a professional interviewer analyzing a mock interview. Your task is to evaluate the candidate based on structured categories",
+Analyze the interview transcript below.
+
+Transcript:
+${formattedTranscript}
+
+Return ONLY valid JSON.
+
+Use EXACTLY this format:
+
+{
+  "totalScore": 85,
+  "categoryScores": [
+    {
+      "name": "Communication Skills",
+      "score": 90,
+      "comment": "..."
+    },
+    {
+      "name": "Technical Knowledge",
+      "score": 82,
+      "comment": "..."
+    },
+    {
+      "name": "Problem-Solving",
+      "score": 80,
+      "comment": "..."
+    },
+    {
+      "name": "Cultural & Role Fit",
+      "score": 88,
+      "comment": "..."
+    },
+    {
+      "name": "Confidence & Clarity",
+      "score": 86,
+      "comment": "..."
+    }
+  ],
+  "strengths": [
+    "...",
+    "...",
+    "..."
+  ],
+  "areasForImprovement": [
+    "...",
+    "...",
+    "..."
+  ],
+  "finalAssessment": "..."
+}
+
+Do NOT wrap the JSON inside markdown.
+Do NOT return explanations.
+Return ONLY JSON.
+`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.5-flash",
+      contents: prompt,
     });
 
+    let text = response.text ?? "";
+
+    // Remove markdown if Gemini adds it
+    text = text.replace(/```json/g, "").replace(/```/g, "").trim();
+
+    console.log("Gemini Feedback:");
+    console.log(text);
+
+    const object = JSON.parse(text);
+
     const feedback = {
-      interviewId: interviewId,
-      userId: userId,
+      interviewId,
+      userId,
       totalScore: object.totalScore,
       categoryScores: object.categoryScores,
       strengths: object.strengths,
@@ -57,14 +114,22 @@ export async function createFeedback(params: CreateFeedbackParams) {
 
     await feedbackRef.set(feedback);
 
-    return { success: true, feedbackId: feedbackRef.id };
+    return {
+      success: true,
+      feedbackId: feedbackRef.id,
+    };
   } catch (error) {
     console.error("Error saving feedback:", error);
-    return { success: false };
+
+    return {
+      success: false,
+    };
   }
 }
 
-export async function getInterviewById(id: string): Promise<Interview | null> {
+export async function getInterviewById(
+  id: string
+): Promise<Interview | null> {
   const interview = await db.collection("interviews").doc(id).get();
 
   return interview.data() as Interview | null;
@@ -85,7 +150,11 @@ export async function getFeedbackByInterviewId(
   if (querySnapshot.empty) return null;
 
   const feedbackDoc = querySnapshot.docs[0];
-  return { id: feedbackDoc.id, ...feedbackDoc.data() } as Feedback;
+
+  return {
+    id: feedbackDoc.id,
+    ...feedbackDoc.data(),
+  } as Feedback;
 }
 
 export async function getLatestInterviews(
