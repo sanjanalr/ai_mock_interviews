@@ -119,6 +119,8 @@ const startCall = async () => {
 
   console.log("Questions:", questions);
 
+  
+
   await vapi.start(
     process.env.NEXT_PUBLIC_VAPI_ASSISTANT_ID!,
     {
