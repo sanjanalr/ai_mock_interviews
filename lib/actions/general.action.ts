@@ -19,63 +19,76 @@ export async function createFeedback(params: CreateFeedbackParams) {
       )
       .join("\n");
 
-    const prompt = `
-You are a professional technical interviewer.
+const prompt = `
+You are an AI interviewer analyzing a mock interview.
 
-Analyze the interview transcript below.
+Your task is to evaluate the candidate based on structured categories.
+
+Be thorough and detailed in your analysis.
+
+Don't be lenient with the candidate.
+
+If there are mistakes or areas for improvement, point them out.
 
 Transcript:
+
 ${formattedTranscript}
 
-Return ONLY valid JSON.
+Score the candidate from 0-100 in ONLY these categories:
 
-Use EXACTLY this format:
+- Communication Skills
+- Technical Knowledge
+- Problem-Solving
+- Cultural & Role Fit
+- Confidence & Clarity
+
+Return ONLY valid JSON in this exact format:
 
 {
   "totalScore": 85,
-  "categoryScores": [
+  "categoryScores":[
     {
-      "name": "Communication Skills",
-      "score": 90,
-      "comment": "..."
+      "name":"Communication Skills",
+      "score":90,
+      "comment":"..."
     },
     {
-      "name": "Technical Knowledge",
-      "score": 82,
-      "comment": "..."
+      "name":"Technical Knowledge",
+      "score":80,
+      "comment":"..."
     },
     {
-      "name": "Problem-Solving",
-      "score": 80,
-      "comment": "..."
+      "name":"Problem-Solving",
+      "score":78,
+      "comment":"..."
     },
     {
-      "name": "Cultural & Role Fit",
-      "score": 88,
-      "comment": "..."
+      "name":"Cultural & Role Fit",
+      "score":85,
+      "comment":"..."
     },
     {
-      "name": "Confidence & Clarity",
-      "score": 86,
-      "comment": "..."
+      "name":"Confidence & Clarity",
+      "score":82,
+      "comment":"..."
     }
   ],
-  "strengths": [
+  "strengths":[
     "...",
     "...",
     "..."
   ],
-  "areasForImprovement": [
+  "areasForImprovement":[
     "...",
     "...",
     "..."
   ],
-  "finalAssessment": "..."
+  "finalAssessment":"..."
 }
 
-Do NOT wrap the JSON inside markdown.
-Do NOT return explanations.
 Return ONLY JSON.
+
+Do not wrap inside markdown.
 `;
 
     const response = await ai.models.generateContent({
@@ -91,7 +104,14 @@ Return ONLY JSON.
     console.log("Gemini Feedback:");
     console.log(text);
 
-    const object = JSON.parse(text);
+    let object;
+
+try {
+  object = JSON.parse(text);
+} catch (e) {
+  console.error("Invalid Gemini JSON:", text);
+  throw e;
+}
 
     const feedback = {
       interviewId,

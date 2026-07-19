@@ -1,9 +1,11 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Image from "next/image";
 
 import { vapi } from "@/lib/vapi.sdk";
+import { createFeedback } from "@/lib/actions/general.action";
 enum CallStatus {
   INACTIVE = "INACTIVE",
   CONNECTING = "CONNECTING",
@@ -20,7 +22,8 @@ const Agent = ({
 }: AgentProps) => {
   const [isSpeaking, setIsSpeaking] = useState(false);
 const [transcript, setTranscript] = useState("");
-
+const router = useRouter();
+const [messages, setMessages] = useState<any[]>([]);
 const [callStatus, setCallStatus] = useState<CallStatus>(
   CallStatus.INACTIVE
 );
@@ -31,9 +34,11 @@ const [callStatus, setCallStatus] = useState<CallStatus>(
     setCallStatus(CallStatus.ACTIVE);
   };
 
+  
+  
   const onCallEnd = () => {
   console.log("Call Ended");
-  setCallStatus(CallStatus.INACTIVE);
+  setCallStatus(CallStatus.FINISHED);
   setIsSpeaking(false);
 };
 
@@ -47,17 +52,39 @@ const [callStatus, setCallStatus] = useState<CallStatus>(
     setIsSpeaking(false);
   };
 
-  const onMessage = (message: any) => {
-    console.log("VAPI:", message);
+const onMessage = (message: any) => {
+  console.log("VAPI:", message);
 
-    if (
-  message?.type === "transcript" &&
-  message?.transcriptType === "final"
-) {
-  setTranscript(message.transcript);
-}
-  };
+  // Show transcript
+  if (
+    message?.type === "transcript" &&
+    message?.transcriptType === "final"
+  ) {
+    setTranscript(message.transcript);
 
+    // Auto end if user says goodbye
+    if (message.role === "user") {
+      const text = message.transcript.toLowerCase();
+
+      if (
+        text.includes("thank you") ||
+        text.includes("thanks") ||
+        text.includes("bye") ||
+        text.includes("goodbye") ||
+        text.includes("end interview") ||
+        text.includes("i am done") ||
+        text.includes("that's all")
+      ) {
+        vapi.stop();
+      }
+    }
+  }
+
+  // Save conversation
+  if (message?.type === "conversation-update") {
+    setMessages(message.conversation);
+  }
+};
   const onError = (error: any) => {
     console.log("Vapi Error:", error);
   };
@@ -78,6 +105,36 @@ const [callStatus, setCallStatus] = useState<CallStatus>(
     vapi.off("error", onError);
   };
 }, []);
+
+
+
+const handleGenerateFeedback = async (messages: any[]) => {
+  console.log("Messages being sent:");
+console.log(messages);
+
+  const { success, feedbackId } = await createFeedback({
+  interviewId: interviewId!,
+  userId: userId!,
+  transcript: messages,
+});
+
+if (success && feedbackId) {
+  router.push(`/interview/${interviewId}/feedback`);
+} else {
+  console.error("Error saving feedback");
+  router.push("/");
+}
+};
+
+useEffect(() => {
+  if (callStatus === CallStatus.FINISHED) {
+    if (type === "generate") {
+      router.push("/");
+    } else {
+      handleGenerateFeedback(messages);
+    }
+  }
+}, [messages, callStatus, type, router, interviewId, userId]);
 
 const startCall = async () => {
   try {
@@ -114,22 +171,29 @@ const startCall = async () => {
     }
 
     // Interview page
-   if (type === "interview") {
+  if (type === "interview") {
   console.log("Starting interview...");
-
   console.log("Questions:", questions);
+
+  let formattedQuestions = "";
+
+  if (questions) {
+    formattedQuestions = questions
+      .map((question) => `- ${question}`)
+      .join("\n");
+  }
 
   
 
-  await vapi.start(
-    process.env.NEXT_PUBLIC_VAPI_ASSISTANT_ID!,
-    {
-      variableValues: {
-        username: userName,
-        questions: questions?.join("\n"),
-      },
-    }
-  );
+ await vapi.start(
+  process.env.NEXT_PUBLIC_VAPI_ASSISTANT_ID!,
+  {
+    variableValues: {
+      username: userName,
+      questions: formattedQuestions,
+    },
+  }
+);
 
   console.log("Interview started");
 }

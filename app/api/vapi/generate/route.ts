@@ -1,64 +1,56 @@
-
+import { GoogleGenAI } from "@google/genai";
 import { db } from "@/firebase/admin";
 import { getRandomInterviewCover } from "@/lib/utils";
 
-
+const ai = new GoogleGenAI({
+  apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY!,
+});
 
 export async function POST(request: Request) {
   const { type, role, level, techstack, amount, userid } =
     await request.json();
 
-    
-
   try {
-    const response = await fetch(
-  `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${process.env.GOOGLE_GENERATIVE_AI_API_KEY}`,
-  {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      contents: [
-        {
-          parts: [
-            {
-              text: prompt,
-            },
-          ],
-        },
-      ],
-    }),
-  }
-);
+    const prompt = `
+Prepare ${amount} interview questions.
 
-if (!response.ok) {
-  const error = await response.text();
-  throw new Error(error);
-}
+Role: ${role}
+Experience Level: ${level}
+Tech Stack: ${techstack}
+Interview Type: ${type}
 
-const data = await response.json();
+Return ONLY a JSON array.
 
-const text =
-  data.candidates?.[0]?.content?.parts?.[0]?.text ?? "[]";
-    console.log("Gemini returned:");
-console.log(text);
+Example:
+[
+  "Question 1",
+  "Question 2",
+  "Question 3"
+]
+`;
 
-   const cleanedText = text
-  .replace(/```json/g, "")
-  .replace(/```/g, "")
-  .trim();
+    const response = await ai.models.generateContent({
+      model: "gemini-3.5-flash",
+      contents: prompt,
+    });
 
-  console.log("Gemini Response:");
-console.log(text);
+    let text = response.text ?? "[]";
 
-const questions = JSON.parse(cleanedText);
+    console.log("Gemini Response:");
+    console.log(text);
+
+    text = text
+      .replace(/```json/g, "")
+      .replace(/```/g, "")
+      .trim();
+
+    const questions = JSON.parse(text);
 
     const interview = {
       role,
       type,
       level,
-      techstack: techstack.split(","),
+      techstack: techstack.split(",").map((item: string) => item.trim()),
       questions,
       userId: userid,
       finalized: true,
@@ -68,15 +60,16 @@ const questions = JSON.parse(cleanedText);
 
     const docRef = await db.collection("interviews").add(interview);
 
-return Response.json({
-  success: true,
-  interviewId: docRef.id,
-  data: interview,
-  },
-  { status: 200 }
-);
+    return Response.json(
+      {
+        success: true,
+        interviewId: docRef.id,
+        data: interview,
+      },
+      { status: 200 }
+    );
   } catch (err) {
-    console.error(err);
+    console.error("Generate Interview Error:", err);
 
     return Response.json(
       {
