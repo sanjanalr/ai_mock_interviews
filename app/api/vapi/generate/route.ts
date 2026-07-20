@@ -1,10 +1,8 @@
-import { GoogleGenAI } from "@google/genai";
+import { generateText } from "ai";
+import { google } from "@ai-sdk/google";
+
 import { db } from "@/firebase/admin";
 import { getRandomInterviewCover } from "@/lib/utils";
-
-const ai = new GoogleGenAI({
-  apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY!,
-});
 
 export async function POST(request: Request) {
   const { type, role, level, techstack, amount, userid } =
@@ -19,9 +17,10 @@ Experience Level: ${level}
 Tech Stack: ${techstack}
 Interview Type: ${type}
 
-Return ONLY a JSON array.
+Return ONLY a valid JSON array.
 
 Example:
+
 [
   "Question 1",
   "Question 2",
@@ -29,22 +28,17 @@ Example:
 ]
 `;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
-      contents: prompt,
+    const { text } = await generateText({
+      model: google("gemini-3.5-flash"),
+      prompt,
     });
 
-    let text = response.text ?? "[]";
-
-    console.log("Gemini Response:");
-    console.log(text);
-
-    text = text
+    const cleanedText = text
       .replace(/```json/g, "")
       .replace(/```/g, "")
       .trim();
 
-    const questions = JSON.parse(text);
+    const questions = JSON.parse(cleanedText);
 
     const interview = {
       role,

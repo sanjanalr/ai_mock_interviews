@@ -36,8 +36,9 @@ const [callStatus, setCallStatus] = useState<CallStatus>(
 
   
   
-  const onCallEnd = () => {
+ const onCallEnd = () => {
   console.log("Call Ended");
+
   setCallStatus(CallStatus.FINISHED);
   setIsSpeaking(false);
 };
@@ -52,39 +53,45 @@ const [callStatus, setCallStatus] = useState<CallStatus>(
     setIsSpeaking(false);
   };
 
+ 
 const onMessage = (message: any) => {
-  console.log("VAPI:", message);
+  console.log("MESSAGE TYPE:", message.type);
+console.log(message);
 
-  // Show transcript
   if (
     message?.type === "transcript" &&
     message?.transcriptType === "final"
   ) {
     setTranscript(message.transcript);
 
-    // Auto end if user says goodbye
+    // Save transcript
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: message.role,
+        content: message.transcript,
+      },
+    ]);
+
+    // Auto end
     if (message.role === "user") {
       const text = message.transcript.toLowerCase();
 
-      if (
-        text.includes("thank you") ||
-        text.includes("thanks") ||
-        text.includes("bye") ||
-        text.includes("goodbye") ||
-        text.includes("end interview") ||
-        text.includes("i am done") ||
-        text.includes("that's all")
-      ) {
-        vapi.stop();
-      }
+      // if (
+      //   text.includes("thank you") ||
+      //   text.includes("thanks") ||
+      //   text.includes("bye") ||
+      //   text.includes("goodbye") ||
+      //   text.includes("i am done") ||
+      //   text.includes("end interview")
+      // ) {
+      //   vapi.stop();
+      // }
     }
   }
-
-  // Save conversation
-  if (message?.type === "conversation-update") {
-    setMessages(message.conversation);
-  }
 };
+
+ 
   const onError = (error: any) => {
     console.log("Vapi Error:", error);
   };

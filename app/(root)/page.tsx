@@ -13,16 +13,19 @@ import {
 const Home = async () => {
   const user = await getCurrentUser();
 
-const userInterviews = await getInterviewsByUserId(user!.id);
+  const userInterviews = await getInterviewsByUserId(user!.id);
 
-const latestInterviews = await getLatestInterviews({
-  userId: user!.id,
-});
+  const recentUserInterviews = userInterviews?.slice(0, 6);
 
-const hasPastInterviews = (userInterviews?.length ?? 0) > 0;
-const hasUpcomingInterviews = (latestInterviews?.length ?? 0) > 0;
+  const latestInterviews = await getLatestInterviews({
+    userId: user!.id,
+  });
+
+  const recentLatestInterviews = latestInterviews?.slice(0, 6);
+
   return (
     <>
+      {/* Hero Section */}
       <section className="card-cta">
         <div className="flex flex-col gap-6 max-w-lg">
           <h2>Get Interview-Ready with AI-Powered Practice & Feedback</h2>
@@ -45,11 +48,23 @@ const hasUpcomingInterviews = (latestInterviews?.length ?? 0) > 0;
         />
       </section>
 
+      {/* Your Interviews */}
       <section className="flex flex-col gap-6 mt-8">
-        <h2>Your Interviews</h2>
+        <div className="flex items-center justify-between">
+          <h2>Your Interviews</h2>
+
+          {userInterviews && userInterviews.length > 6 && (
+            <Link
+              href="/my-interviews"
+              className="text-primary-200 hover:underline"
+            >
+              View All →
+            </Link>
+          )}
+        </div>
 
         <div className="interviews-section">
-          {userInterviews?.map((interview) => (
+          {recentUserInterviews?.map((interview) => (
             <InterviewCard
               key={interview.id}
               userId={interview.userId}
@@ -63,11 +78,23 @@ const hasUpcomingInterviews = (latestInterviews?.length ?? 0) > 0;
         </div>
       </section>
 
+      {/* Take Interviews */}
       <section className="flex flex-col gap-6 mt-8">
-        <h2>Take Interviews</h2>
+        <div className="flex items-center justify-between">
+          <h2>Take Interviews</h2>
+
+          {latestInterviews && latestInterviews.length > 6 && (
+            <Link
+              href="/interviews"
+              className="text-primary-200 hover:underline"
+            >
+              View All →
+            </Link>
+          )}
+        </div>
 
         <div className="interviews-section">
-          {latestInterviews?.map((interview) => (
+          {recentLatestInterviews?.map((interview) => (
             <InterviewCard
               key={interview.id}
               userId={interview.userId}
@@ -82,6 +109,6 @@ const hasUpcomingInterviews = (latestInterviews?.length ?? 0) > 0;
       </section>
     </>
   );
-}
+};
 
 export default Home;

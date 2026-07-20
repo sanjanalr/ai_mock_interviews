@@ -1,12 +1,10 @@
 "use server";
 
-import { GoogleGenAI } from "@google/genai";
+import { generateObject } from "ai";
+import { google } from "@ai-sdk/google";
 
 import { db } from "@/firebase/admin";
-
-const ai = new GoogleGenAI({
-  apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY!,
-});
+import { feedbackSchema } from "@/constants";
 
 export async function createFeedback(params: CreateFeedbackParams) {
   const { interviewId, userId, transcript, feedbackId } = params;
@@ -19,14 +17,19 @@ export async function createFeedback(params: CreateFeedbackParams) {
       )
       .join("\n");
 
-const prompt = `
+const { object } = await generateObject({
+  model: google("gemini-3.5-flash"),
+
+  schema: feedbackSchema,
+
+  prompt: `
 You are an AI interviewer analyzing a mock interview.
 
 Your task is to evaluate the candidate based on structured categories.
 
 Be thorough and detailed in your analysis.
 
-Don't be lenient with the candidate.
+Do not be lenient with the candidate.
 
 If there are mistakes or areas for improvement, point them out.
 
@@ -34,84 +37,19 @@ Transcript:
 
 ${formattedTranscript}
 
-Score the candidate from 0-100 in ONLY these categories:
+Please score the candidate from 0 to 100 in ONLY these categories:
 
 - Communication Skills
 - Technical Knowledge
 - Problem-Solving
 - Cultural & Role Fit
 - Confidence & Clarity
+`,
+  system:
+    "You are a professional interviewer analyzing a mock interview.",
+});
 
-Return ONLY valid JSON in this exact format:
 
-{
-  "totalScore": 85,
-  "categoryScores":[
-    {
-      "name":"Communication Skills",
-      "score":90,
-      "comment":"..."
-    },
-    {
-      "name":"Technical Knowledge",
-      "score":80,
-      "comment":"..."
-    },
-    {
-      "name":"Problem-Solving",
-      "score":78,
-      "comment":"..."
-    },
-    {
-      "name":"Cultural & Role Fit",
-      "score":85,
-      "comment":"..."
-    },
-    {
-      "name":"Confidence & Clarity",
-      "score":82,
-      "comment":"..."
-    }
-  ],
-  "strengths":[
-    "...",
-    "...",
-    "..."
-  ],
-  "areasForImprovement":[
-    "...",
-    "...",
-    "..."
-  ],
-  "finalAssessment":"..."
-}
-
-Return ONLY JSON.
-
-Do not wrap inside markdown.
-`;
-
-    const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
-      contents: prompt,
-    });
-
-    let text = response.text ?? "";
-
-    // Remove markdown if Gemini adds it
-    text = text.replace(/```json/g, "").replace(/```/g, "").trim();
-
-    console.log("Gemini Feedback:");
-    console.log(text);
-
-    let object;
-
-try {
-  object = JSON.parse(text);
-} catch (e) {
-  console.error("Invalid Gemini JSON:", text);
-  throw e;
-}
 
     const feedback = {
       interviewId,
@@ -150,9 +88,22 @@ try {
 export async function getInterviewById(
   id: string
 ): Promise<Interview | null> {
-  const interview = await db.collection("interviews").doc(id).get();
+  console.log("Fetching interview:", id);
 
-  return interview.data() as Interview | null;
+  const doc = await db.collection("interviews").doc(id).get();
+
+  console.log("Document exists:", doc.exists);
+
+  if (!doc.exists) {
+    return null;
+  }
+
+  console.log("Interview data:", doc.data());
+
+  return {
+    id: doc.id,
+    ...doc.data(),
+  } as Interview;
 }
 
 export async function getFeedbackByInterviewId(
