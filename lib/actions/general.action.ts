@@ -1,6 +1,6 @@
 "use server";
 
-import { generateObject } from "ai";
+import { generateText } from "ai";
 import { google } from "@ai-sdk/google";
 
 import { db } from "@/firebase/admin";
@@ -17,39 +17,70 @@ export async function createFeedback(params: CreateFeedbackParams) {
       )
       .join("\n");
 
-const { object } = await generateObject({
-  model: google("gemini-3.5-flash"),
+      console.log(
+  "Gemini Key Prefix:",
+  process.env.GOOGLE_GENERATIVE_AI_API_KEY?.slice(0, 15)
+);
+    const { text } = await generateText({
+      model: google("gemini-3.5-flash"),
 
-  schema: feedbackSchema,
+      prompt: `
+You are an experienced technical interviewer.
 
-  prompt: `
-You are an AI interviewer analyzing a mock interview.
-
-Your task is to evaluate the candidate based on structured categories.
-
-Be thorough and detailed in your analysis.
-
-Do not be lenient with the candidate.
-
-If there are mistakes or areas for improvement, point them out.
+Analyze the following interview transcript.
 
 Transcript:
-
 ${formattedTranscript}
 
-Please score the candidate from 0 to 100 in ONLY these categories:
+Return ONLY valid JSON.
 
-- Communication Skills
-- Technical Knowledge
-- Problem-Solving
-- Cultural & Role Fit
-- Confidence & Clarity
+Format:
+
+{
+  "totalScore":90,
+  "categoryScores":[
+    {
+      "name":"Communication Skills",
+      "score":90,
+      "comment":"Excellent communication."
+    },
+    {
+      "name":"Technical Knowledge",
+      "score":88,
+      "comment":"Strong technical understanding."
+    },
+    {
+      "name":"Problem-Solving",
+      "score":86,
+      "comment":"Logical approach."
+    },
+    {
+      "name":"Cultural & Role Fit",
+      "score":90,
+      "comment":"Good role fit."
+    },
+    {
+      "name":"Confidence & Clarity",
+      "score":89,
+      "comment":"Confident throughout."
+    }
+  ],
+  "strengths":[
+    "..."
+  ],
+  "areasForImprovement":[
+    "..."
+  ],
+  "finalAssessment":"..."
+}
+
+Return ONLY JSON.
 `,
-  system:
-    "You are a professional interviewer analyzing a mock interview.",
-});
+    });
 
-
+    const object = JSON.parse(
+      text.replace(/```json/g, "").replace(/```/g, "").trim()
+    );
 
     const feedback = {
       interviewId,
@@ -62,13 +93,9 @@ Please score the candidate from 0 to 100 in ONLY these categories:
       createdAt: new Date().toISOString(),
     };
 
-    let feedbackRef;
-
-    if (feedbackId) {
-      feedbackRef = db.collection("feedback").doc(feedbackId);
-    } else {
-      feedbackRef = db.collection("feedback").doc();
-    }
+    const feedbackRef = feedbackId
+      ? db.collection("feedback").doc(feedbackId)
+      : db.collection("feedback").doc();
 
     await feedbackRef.set(feedback);
 
@@ -76,14 +103,16 @@ Please score the candidate from 0 to 100 in ONLY these categories:
       success: true,
       feedbackId: feedbackRef.id,
     };
-  } catch (error) {
-    console.error("Error saving feedback:", error);
+  } catch (error: any) {
+  console.error("Error saving feedback:", error);
 
-    return {
-      success: false,
-    };
-  }
+  return {
+    success: false,
+    error: error?.message ?? "Failed to generate feedback.",
+  };
 }
+}
+
 
 export async function getInterviewById(
   id: string
